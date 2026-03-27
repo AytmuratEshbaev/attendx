@@ -1,0 +1,35 @@
+﻿
+> attendx-frontend@1.0.0 lint D:\Projects\AttendX\frontend
+> eslint .
+
+
+D:\Projects\AttendX\frontend\src\components\ui\badge.tsx
+  36:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\Projects\AttendX\frontend\src\components\ui\button.tsx
+  57:18  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\Projects\AttendX\frontend\src\pages\Devices.tsx
+  102:9  warning  The 'devices' logical expression could make the dependencies of useMemo Hook (at line 128) change on every render. To fix this, wrap the initialization of 'devices' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+D:\Projects\AttendX\frontend\src\pages\Reports.tsx
+  75:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\Projects\AttendX\frontend\src\pages\Reports.tsx:75:5
+  73 |     // For now, we will simply set it once.
+  74 |     const history = getReportHistory();
+> 75 |     setReportHistory(history);
+     |     ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  76 |   }, []);
+  77 |
+  78 |   const fmt = (d: Date) => d.toISOString().split("T")[0];  react-hooks/set-state-in-effect
+
+Γ£û 4 problems (3 errors, 1 warning)
+
+ΓÇëELIFECYCLEΓÇë Command failed with exit code 1.

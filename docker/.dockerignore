@@ -1,0 +1,16 @@
+**/.git
+**/.venv
+**/venv
+**/__pycache__
+**/node_modules
+**/.env
+**/.env.local
+**/dist
+**/build
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+**/htmlcov
+**/*.pyc
+**/.DS_Store
+**/Thumbs.db

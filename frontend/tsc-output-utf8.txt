@@ -1,0 +1,6 @@
+﻿src/components/students/StudentSidePanel.tsx(85,25): error TS2339: Property 'phone' does not exist on type 'Student'.
+src/components/students/StudentSidePanel.tsx(87,28): error TS2339: Property 'phone' does not exist on type 'Student'.
+src/components/students/StudentSidePanel.tsx(90,32): error TS2339: Property 'phone' does not exist on type 'Student'.
+src/pages/Categories.tsx(8,1): error TS6133: 'Badge' is declared but its value is never read.
+src/pages/Categories.tsx(10,1): error TS6133: 'Switch' is declared but its value is never read.
+src/pages/Settings.tsx(14,3): error TS6133: 'Users' is declared but its value is never read.

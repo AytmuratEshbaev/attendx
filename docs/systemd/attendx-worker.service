@@ -1,0 +1,18 @@
+[Unit]
+Description=AttendX Worker (Hikvision Poller)
+After=network.target docker.service attendx-backend.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/attendx
+ExecStart=/usr/bin/docker compose -f docker/docker-compose.prod.yml up worker
+ExecStop=/usr/bin/docker compose -f docker/docker-compose.prod.yml stop worker
+Restart=on-failure
+RestartSec=15s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=attendx-worker
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing & CI
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Development tools
+.git/
+.gitignore
+.pre-commit-config.yaml
+.ruff_cache/
+.mypy_cache/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Docs
+docs/
+*.md
+
+# Sensitive files
+.env
+.env.*
+!.env.example
+
+# Local data
+*.db
+*.sqlite
+test.db
+
+# Logs
+*.log
+
+# Alembic (migrations run separately)
+# alembic/  # keep for auto-migration on startup

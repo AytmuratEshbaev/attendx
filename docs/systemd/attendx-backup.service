@@ -1,0 +1,14 @@
+[Unit]
+Description=AttendX Database Backup
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/attendx
+ExecStart=/usr/bin/docker compose -f docker/docker-compose.prod.yml \
+    exec -T backend python -m scripts.backup
+StandardOutput=append:/var/log/attendx_backup.log
+StandardError=append:/var/log/attendx_backup.log
+
+[Install]
+WantedBy=multi-user.target

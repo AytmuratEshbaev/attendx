@@ -1,0 +1,201 @@
+# ==============================================================================
+# AttendX — Production Docker Compose
+# ==============================================================================
+# Usage: docker compose -f docker/docker-compose.prod.yml up -d
+# ==============================================================================
+
+services:
+  # -- Backend (FastAPI) -------------------------------------------------------
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: attendx-backend:latest
+    container_name: attendx-backend
+    restart: always
+    expose:
+      - "8000"
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      LOG_LEVEL: INFO
+    volumes:
+      - face_data:/data/faces
+      - backup_data:/data/backups
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendx-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # -- Worker (Hikvision poller) -----------------------------------------------
+  worker:
+    image: attendx-backend:latest
+    container_name: attendx-worker
+    restart: always
+    command: python -m worker.main
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      LOG_LEVEL: INFO
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendx-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # -- Telegram Bot ------------------------------------------------------------
+  bot:
+    image: attendx-backend:latest
+    container_name: attendx-bot
+    restart: always
+    command: python -m bot.main
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      LOG_LEVEL: INFO
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendx-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # -- Frontend (static build served by nginx) ---------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: attendx-frontend:latest
+    container_name: attendx-frontend
+    restart: always
+    expose:
+      - "80"
+    networks:
+      - attendx-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+
+  # -- PostgreSQL 15 -----------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: attendx-db
+    restart: always
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendx-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # -- Redis 7 -----------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: attendx-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme} --appendonly yes
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendx-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # -- Nginx (reverse proxy + SSL) ---------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: attendx-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - letsencrypt_data:/etc/letsencrypt:ro
+      - letsencrypt_www:/var/www/certbot:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - attendx-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  face_data:
+    driver: local
+  backup_data:
+    driver: local
+  letsencrypt_data:
+    driver: local
+  letsencrypt_www:
+    driver: local
+
+networks:
+  attendx-network:
+    driver: bridge

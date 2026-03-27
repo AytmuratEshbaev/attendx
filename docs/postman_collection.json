@@ -1,0 +1,424 @@
+{
+  "info": {
+    "name": "AttendX API",
+    "description": "Face Recognition Attendance Platform API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8000"},
+    {"key": "access_token", "value": ""},
+    {"key": "refresh_token", "value": ""},
+    {"key": "api_key", "value": "change-me"}
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{access_token}}"}]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/login",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\": \"admin\", \"password\": \"Admin1234\"}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "var data = pm.response.json();",
+                "if (data.success) {",
+                "  pm.collectionVariables.set('access_token', data.data.access_token);",
+                "  pm.collectionVariables.set('refresh_token', data.data.refresh_token);",
+                "}"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/refresh",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refresh_token\": \"{{refresh_token}}\"}"
+            }
+          }
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/change-password",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"old_password\": \"Admin1234\", \"new_password\": \"NewPass1234\"}"
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        {
+          "name": "List Students",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/students?page=1&per_page=20&sort=-created_at",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "students"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "per_page", "value": "20"},
+                {"key": "class_name", "value": "", "disabled": true},
+                {"key": "search", "value": "", "disabled": true},
+                {"key": "is_active", "value": "true"},
+                {"key": "sort", "value": "-created_at"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Student",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/students",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Test Student\", \"class_name\": \"7-A\", \"employee_no\": \"TST001\"}"
+            }
+          }
+        },
+        {
+          "name": "Get Student",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/students/:student_id"
+          }
+        },
+        {
+          "name": "Update Student",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/students/:student_id",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Updated Name\"}"
+            }
+          }
+        },
+        {
+          "name": "Delete Student",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/students/:student_id"
+          }
+        },
+        {
+          "name": "Upload Face",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/students/:student_id/face",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{"key": "file", "type": "file", "src": ""}]
+            }
+          }
+        },
+        {
+          "name": "Import Students (Excel)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/students/import",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{"key": "file", "type": "file", "src": ""}]
+            }
+          }
+        },
+        {
+          "name": "Export Students",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/students/export?format=xlsx",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "students", "export"],
+              "query": [{"key": "format", "value": "xlsx"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "List Attendance",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendance?page=1&per_page=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendance"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "per_page", "value": "50"},
+                {"key": "date_from", "value": "", "disabled": true},
+                {"key": "date_to", "value": "", "disabled": true},
+                {"key": "event_type", "value": "", "disabled": true}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Today's Attendance",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/attendance/today"
+          }
+        },
+        {
+          "name": "Attendance Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/attendance/stats"
+          }
+        },
+        {
+          "name": "Weekly Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/attendance/weekly"
+          }
+        },
+        {
+          "name": "Student Attendance",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/attendance/student/:student_id"
+          }
+        },
+        {
+          "name": "Attendance Report (XLSX)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendance/report?date_from=2026-01-01&date_to=2026-01-31&format=xlsx",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendance", "report"],
+              "query": [
+                {"key": "date_from", "value": "2026-01-01"},
+                {"key": "date_to", "value": "2026-01-31"},
+                {"key": "format", "value": "xlsx"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "List Devices",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/devices"}
+        },
+        {
+          "name": "Create Device",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/devices",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Entry Terminal\", \"ip_address\": \"192.168.1.100\", \"port\": 80, \"username\": \"admin\", \"password\": \"admin123\", \"is_entry\": true}"
+            }
+          }
+        },
+        {
+          "name": "Update Device",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/devices/:device_id",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"name\": \"Updated Terminal\"}"}
+          }
+        },
+        {
+          "name": "Delete Device",
+          "request": {"method": "DELETE", "url": "{{base_url}}/api/v1/devices/:device_id"}
+        },
+        {
+          "name": "Sync Device",
+          "request": {"method": "POST", "url": "{{base_url}}/api/v1/devices/:device_id/sync"}
+        },
+        {
+          "name": "Device Health",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/devices/:device_id/health"}
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "List Webhooks",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/webhooks"}
+        },
+        {
+          "name": "Create Webhook",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/webhooks",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"url\": \"https://example.com/webhook\", \"events\": [\"attendance.entry\", \"attendance.exit\"], \"description\": \"My webhook\"}"
+            }
+          }
+        },
+        {
+          "name": "Update Webhook",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/webhooks/:webhook_id",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"description\": \"Updated\"}"}
+          }
+        },
+        {
+          "name": "Delete Webhook",
+          "request": {"method": "DELETE", "url": "{{base_url}}/api/v1/webhooks/:webhook_id"}
+        },
+        {
+          "name": "Webhook Logs",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/webhooks/:webhook_id/logs"}
+        },
+        {
+          "name": "Test Webhook",
+          "request": {"method": "POST", "url": "{{base_url}}/api/v1/webhooks/:webhook_id/test"}
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Daily Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/daily?format=xlsx",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "daily"],
+              "query": [{"key": "format", "value": "xlsx"}]
+            }
+          }
+        },
+        {
+          "name": "Weekly Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/weekly?format=xlsx",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "weekly"],
+              "query": [{"key": "format", "value": "xlsx"}]
+            }
+          }
+        },
+        {
+          "name": "Monthly Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/monthly?year=2026&month=2&format=xlsx",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "monthly"],
+              "query": [
+                {"key": "year", "value": "2026"},
+                {"key": "month", "value": "2"},
+                {"key": "format", "value": "xlsx"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "External API",
+      "item": [
+        {
+          "name": "List Students (API Key)",
+          "request": {
+            "auth": {"type": "apikey", "apikey": [{"key": "key", "value": "{{api_key}}"}, {"key": "in", "value": "header"}, {"key": "value", "value": "X-API-Key"}]},
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/external/students",
+            "header": [{"key": "X-API-Key", "value": "{{api_key}}"}]
+          }
+        },
+        {
+          "name": "Today Attendance (API Key)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/external/attendance/today",
+            "header": [{"key": "X-API-Key", "value": "{{api_key}}"}]
+          }
+        },
+        {
+          "name": "Query Attendance (API Key)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/external/attendance/query",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "X-API-Key", "value": "{{api_key}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"date_from\": \"2026-01-01\", \"date_to\": \"2026-01-31\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": "{{base_url}}/health"}
+        }
+      ]
+    }
+  ]
+}

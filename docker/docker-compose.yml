@@ -1,0 +1,151 @@
+# ==============================================================================
+# AttendX — Development Docker Compose
+# ==============================================================================
+# Usage: docker compose -f docker/docker-compose.yml up -d
+# ==============================================================================
+
+services:
+  # -- Backend (FastAPI) -------------------------------------------------------
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: attendx-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    volumes:
+      - ../backend:/app
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendx-network
+
+  # -- Frontend (Vite dev server) ----------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    container_name: attendx-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_PROXY_TARGET=http://backend:8000
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    command: pnpm dev --host 0.0.0.0 --port 3000
+    networks:
+      - attendx-network
+
+  # -- PostgreSQL 15 -----------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: attendx-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-attendx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-attendx}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-attendx} -d ${POSTGRES_DB:-attendx}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendx-network
+
+  # -- Redis 7 -----------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: attendx-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendx-network
+
+  # -- Hikvision Worker (attendance poller) ------------------------------------
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: attendx-worker
+    restart: unless-stopped
+    command: python -m worker.main
+    env_file:
+      - ../.env
+    volumes:
+      - ../backend:/app
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendx-network
+
+  # -- Telegram Bot ------------------------------------------------------------
+  bot:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: attendx-bot
+    restart: unless-stopped
+    command: python -m bot.main
+    env_file:
+      - ../.env
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendx-network
+
+  # -- Nginx (reverse proxy) ---------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: attendx-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - attendx-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  attendx-network:
+    driver: bridge

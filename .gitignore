@@ -1,0 +1,73 @@
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.local
+.env.*.local
+
+# ========================
+# Python / Backend
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+*.db
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# ========================
+# Node.js / Frontend
+# ========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ========================
+# Build Outputs
+# ========================
+frontend/dist/
+frontend/build/
+*.tsbuildinfo
+
+# ========================
+# Docker
+# ========================
+docker/volumes/
+*.log
+
+# ========================
+# IDE & OS
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Uploads & Runtime Data
+# ========================
+uploads/
+data/
+backend/data/
