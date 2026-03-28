@@ -13,8 +13,8 @@ import { Label } from "@/components/ui/label";
 import { authApi } from "@/services/authApi";
 import { useAuthStore } from "@/store/authStore";
 import { getErrorMessage } from "@/services/api";
-import darkLogoUrl from "@/assets/dark_logo.png";
-import whiteLogoUrl from "@/assets/white_logo.png";
+import darkLogoUrl from "@/assets/dark_logo.webp";
+import whiteLogoUrl from "@/assets/white_logo.webp";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Foydalanuvchi nomi kiritilishi shart"),

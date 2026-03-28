@@ -166,13 +166,48 @@ async def attendance_stream(
     )
 
 
+_STATS_CACHE_KEY = "sse:stats:cache"
+_STATS_CACHE_TTL = 30  # seconds
+
+
+async def _fetch_stats(redis) -> dict:
+    """Fetch attendance stats — Redis-cached for 30s so all SSE clients share one DB query."""
+    cached = await redis.get(_STATS_CACHE_KEY)
+    if cached:
+        return json.loads(cached)
+
+    today = date.today()
+    async with AsyncSessionLocal() as db:
+        total = (await db.execute(
+            select(func.count(Student.id)).where(Student.is_active.is_(True))
+        )).scalar() or 0
+
+        present = (await db.execute(
+            select(func.count(func.distinct(AttendanceLog.student_id))).where(
+                func.date(AttendanceLog.event_time) == today
+            )
+        )).scalar() or 0
+
+    payload = {
+        "total_students": total,
+        "present_today": present,
+        "absent_today": max(0, total - present),
+        "attendance_percentage": round(present / total * 100) if total else 0,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    await redis.set(_STATS_CACHE_KEY, json.dumps(payload), ex=_STATS_CACHE_TTL)
+    return payload
+
+
 @router.get("/stats")
 async def stats_stream(
     request: Request,
+    redis=Depends(get_redis),
     token: str | None = Query(None),
 ):
     """
     SSE stream for live dashboard statistics (refreshed every 30s).
+    Stats are Redis-cached so all connected clients share one DB query per 30s.
     """
     _user = await _get_sse_user(request, token)
 
@@ -184,29 +219,8 @@ async def stats_stream(
                 break
 
             try:
-                today = date.today()
-
-                async with AsyncSessionLocal() as db:
-                    total = (await db.execute(
-                        select(func.count(Student.id)).where(Student.is_active.is_(True))
-                    )).scalar() or 0
-
-                    present = (await db.execute(
-                        select(func.count(func.distinct(AttendanceLog.student_id))).where(
-                            func.date(AttendanceLog.event_time) == today
-                        )
-                    )).scalar() or 0
-
-                payload = {
-                    "total_students": total,
-                    "present_today": present,
-                    "absent_today": max(0, total - present),
-                    "attendance_percentage": round(present / total * 100) if total else 0,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-
+                payload = await _fetch_stats(redis)
                 yield f"event: stats\ndata: {json.dumps(payload)}\n\n"
-
             except Exception as e:
                 logger.warning("sse_stats_error", error=str(e))
 

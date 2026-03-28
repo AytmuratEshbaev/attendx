@@ -25,8 +25,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import darkLogoUrl from "@/assets/dark_logo.png";
-import whiteLogoUrl from "@/assets/white_logo.png";
+import darkLogoUrl from "@/assets/dark_logo.webp";
+import whiteLogoUrl from "@/assets/white_logo.webp";
 
 interface NavItem {
   to: string;

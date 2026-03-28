@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as aioredis
@@ -173,7 +174,6 @@ class AttendancePoller:
                 saved += 1
 
                 # Publish to SSE channel for real-time dashboard updates
-                import json
                 sse_payload = json.dumps({
                     "student_id": str(student.id),
                     "student_name": student.name,
@@ -196,14 +196,17 @@ class AttendancePoller:
                 # Fire webhook (fire-and-forget)
                 mgr = get_webhook_event_manager()
                 if mgr:
-                    if resolved_event_type == "entry":
-                        asyncio.create_task(
-                            mgr.on_attendance_entry(student, device, event.event_time)
-                        )
-                    else:
-                        asyncio.create_task(
-                            mgr.on_attendance_exit(student, device, event.event_time)
-                        )
+                    coro = (
+                        mgr.on_attendance_entry(student, device, event.event_time)
+                        if resolved_event_type == "entry"
+                        else mgr.on_attendance_exit(student, device, event.event_time)
+                    )
+                    task = asyncio.create_task(coro)
+                    task.add_done_callback(
+                        lambda t: logger.warning(
+                            "webhook_dispatch_error", error=str(t.exception())
+                        ) if t.exception() else None
+                    )
 
             await session.commit()
 

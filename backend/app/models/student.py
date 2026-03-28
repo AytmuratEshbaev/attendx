@@ -42,7 +42,7 @@ class Student(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     attendance_logs: Mapped[list["AttendanceLog"]] = relationship(
-        back_populates="student", lazy="selectin"
+        back_populates="student", lazy="noload"
     )
     category: Mapped["Category | None"] = relationship(
         back_populates="students", lazy="selectin"
