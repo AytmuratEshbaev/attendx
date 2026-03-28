@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   RefreshCw,
   UserCheck,
+  LogIn,
   LogOut,
   Fingerprint,
   CreditCard,
@@ -173,6 +174,7 @@ interface EventItem {
   student_id?: string;
   student_name?: string;
   class_name?: string;
+  category_name?: string | null;
   device_name?: string;
   event_type?: string;
   event_time?: string;
@@ -190,12 +192,12 @@ function LastEventCard({ ev }: { ev: EventItem }) {
     <div
       className={cn(
         "flex rounded-xl overflow-hidden border transition-all duration-300 premium-shadow glass-panel group hover:shadow-2xl hover:-translate-y-1 relative z-10",
-        isEntry ? "border-success/30 bg-success/5 dark:bg-success/10" : "border-orange-500/30 bg-orange-500/5 dark:bg-orange-500/10"
+        isEntry ? "border-success/30 bg-success/5 dark:bg-success/10" : "border-red-500/30 bg-red-500/5 dark:bg-red-500/10"
       )}
     >
       <div className={cn(
         "absolute inset-0 bg-gradient-to-r opacity-10 blur-xl -z-10 transition-opacity group-hover:opacity-20",
-        isEntry ? "from-success" : "from-orange-500"
+        isEntry ? "from-success" : "from-red-500"
       )} />
       {/* Photo */}
       <div className="relative w-64 shrink-0 h-64">
@@ -203,9 +205,9 @@ function LastEventCard({ ev }: { ev: EventItem }) {
         {/* Entry/exit badge overlay */}
         <div className={cn(
           "absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold text-white shadow-lg backdrop-blur-md",
-          isEntry ? "bg-success/90 dark:bg-success/80" : "bg-orange-500/90 dark:bg-orange-500/80"
+          isEntry ? "bg-success/90 dark:bg-success/80" : "bg-red-600/90 dark:bg-red-600/80"
         )}>
-          {isEntry ? <UserCheck className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
+          {isEntry ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
           {isEntry ? "Kirdi" : "Chiqdi"}
         </div>
       </div>
@@ -237,7 +239,7 @@ function LastEventCard({ ev }: { ev: EventItem }) {
 
         <p className={cn(
           "text-4xl font-mono font-black tabular-nums tracking-tight mt-auto",
-          isEntry ? "text-success dark:text-success text-glow" : "text-orange-600 dark:text-orange-500 text-shadow"
+          isEntry ? "text-success dark:text-success text-glow" : "text-red-600 dark:text-red-500 text-shadow"
         )}>
           {ev.event_time
             ? new Date(ev.event_time).toLocaleTimeString("uz", {
@@ -263,6 +265,7 @@ function LastEventCard({ ev }: { ev: EventItem }) {
 interface DisplayEvent extends EventItem {
   key: string;
   student_name: string;
+  category_name?: string | null;
   device_name: string;
   event_type: "entry" | "exit";
   event_time: string;
@@ -300,6 +303,7 @@ function RealTimeEvents() {
       student_id: e.student_id,
       student_name: e.student_name,
       class_name: e.class_name,
+      category_name: (e as { category_name?: string | null }).category_name ?? null,
       device_name: e.device_name,
       event_type: e.event_type as "entry" | "exit",
       event_time: e.event_time,
@@ -312,6 +316,7 @@ function RealTimeEvents() {
       student_id: e.student_id,
       student_name: e.student_name,
       class_name: e.class_name,
+      category_name: (e as { category_name?: string | null }).category_name ?? null,
       device_name: e.device_name,
       event_type: e.event_type as "entry" | "exit",
       event_time: e.event_time,
@@ -346,7 +351,7 @@ function RealTimeEvents() {
     <div className="flex flex-col h-full min-h-0 py-2">
       <Card className="flex flex-col h-full min-h-0 glass-card border-none">
         <CardHeader className="flex-row items-center justify-between pb-4 shrink-0 border-b border-border/50 bg-white/30 dark:bg-slate-900/30 rounded-t-xl backdrop-blur-md mb-4">
-          <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">Real-time hodisalar</CardTitle>
+          <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">So'nggi hodisalar</CardTitle>
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
@@ -388,8 +393,10 @@ function RealTimeEvents() {
                 <thead className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-border/50 z-10">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium text-muted-foreground">Ismi</th>
+                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Guruh</th>
                     <th className="px-4 py-2 text-left font-medium text-muted-foreground">Qurilma</th>
-                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Voqea turi</th>
+                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Voqea</th>
+                    <th className="px-4 py-2 text-left font-medium text-muted-foreground">Nima orqali</th>
                     <th className="px-4 py-2 text-left font-medium text-muted-foreground">Vaqt</th>
                     <th className="px-4 py-2 text-center font-medium text-muted-foreground">Rasm</th>
                   </tr>
@@ -404,22 +411,41 @@ function RealTimeEvents() {
                         key={`${ev.key}-${i}`}
                         className="border-b last:border-0 hover:bg-muted/50 transition-colors"
                       >
+                        {/* Ismi */}
                         <td className="px-4 py-2 font-medium">{ev.student_name ?? "—"}</td>
+
+                        {/* Guruh */}
+                        <td className="px-4 py-2 text-xs text-muted-foreground">
+                          {ev.category_name ?? ev.class_name ?? "—"}
+                        </td>
+
+                        {/* Qurilma */}
                         <td className="px-4 py-2 text-xs text-muted-foreground">{ev.device_name ?? "—"}</td>
+
+                        {/* Voqea */}
                         <td className="px-4 py-2">
-                          <span className={cn(
-                            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-                            isEntry
-                              ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
-                              : "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400"
-                          )}>
-                            {isEntry ? <UserCheck className="h-3 w-3" /> : <LogOut className="h-3 w-3" />}
-                            {isEntry ? "Kirdi" : "Chiqdi"}
-                            <span className="opacity-40">·</span>
+                          {isEntry ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-950 dark:text-green-400">
+                              <LogIn className="h-3 w-3" />
+                              Kirdi
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950 dark:text-red-400">
+                              <LogOut className="h-3 w-3" />
+                              Chiqdi
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Nima orqali */}
+                        <td className="px-4 py-2">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                             <VerifyIcon className="h-3 w-3" />
                             {verify.label}
                           </span>
                         </td>
+
+                        {/* Vaqt */}
                         <td className="px-4 py-2 text-xs text-muted-foreground">
                           {ev.event_time ? (
                             <>
@@ -439,6 +465,8 @@ function RealTimeEvents() {
                             </>
                           ) : "—"}
                         </td>
+
+                        {/* Rasm */}
                         <td className="px-4 py-2 text-center">
                           <button
                             onClick={() =>

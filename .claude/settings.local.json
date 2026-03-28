@@ -62,7 +62,8 @@
       "Bash(__NEW_LINE_9100c9bd579c0519__ echo:*)",
       "Bash(docker ps 2>/dev/null | head -5 && docker-compose -f /d/Projects/AttendX/docker/docker-compose.yml ps 2>/dev/null || echo \"docker not running or no compose\")",
       "Bash(powershell.exe -Command \"Start-Process ''C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe''\")",
-      "Bash(claude doctor:*)"
+      "Bash(claude doctor:*)",
+      "Bash(find /d/Projects/AttendX/frontend/src -type f \\\\\\(-name *.tsx -o -name *.ts \\\\\\))"
     ]
   }
 }

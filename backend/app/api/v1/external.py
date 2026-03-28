@@ -32,10 +32,16 @@ def _log_to_response(log) -> AttendanceResponse:
         student_id=log.student_id,
         student_name=log.student.name if log.student else "Unknown",
         class_name=log.student.class_name if log.student else None,
+        category_name=(
+            log.student.category.name
+            if log.student and log.student.category
+            else None
+        ),
         device_name=log.device.name if log.device else None,
         event_time=log.event_time,
         event_type=log.event_type,
         verify_mode=log.verify_mode,
+        picture_url=log.picture_url,
     )
 
 

@@ -28,7 +28,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { useQuery } from "@tanstack/react-query";
 import { attendanceApi } from "@/services/attendanceApi";
+import { studentsApi } from "@/services/studentsApi";
 import { getErrorMessage } from "@/services/api";
 import { useDownload } from "@/hooks/useDownload";
 import { useReportHistory } from "@/hooks/useReportHistory";
@@ -45,6 +47,13 @@ export default function Reports() {
 
   const { reportHistory, addReportHistory, clearReportHistory } = useReportHistory();
   const { download } = useDownload();
+
+  const { data: classesRes } = useQuery({
+    queryKey: ["student-classes"],
+    queryFn: () => studentsApi.classes(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const classList = classesRes?.data?.data ?? [];
 
   const fmt = (d: Date) => d.toISOString().split("T")[0];
 
@@ -188,12 +197,9 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Barcha sinflar</SelectItem>
-                  <SelectItem value="7-A">7-A</SelectItem>
-                  <SelectItem value="7-B">7-B</SelectItem>
-                  <SelectItem value="8-A">8-A</SelectItem>
-                  <SelectItem value="8-B">8-B</SelectItem>
-                  <SelectItem value="9-A">9-A</SelectItem>
-                  <SelectItem value="9-B">9-B</SelectItem>
+                  {classList.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

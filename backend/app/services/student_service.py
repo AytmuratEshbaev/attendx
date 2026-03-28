@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import ErrorCode
@@ -27,9 +28,18 @@ class StudentService:
         self.repo = StudentRepository(session)
         self.session = session
 
+    async def get_unique_classes(self) -> list[str]:
+        """Return sorted list of unique non-null class names from active students."""
+        result = await self.session.execute(
+            select(Student.class_name)
+            .where(Student.class_name.is_not(None), Student.is_active.is_(True))
+            .distinct()
+            .order_by(Student.class_name)
+        )
+        return [r for r in result.scalars().all() if r]
+
     async def _resolve_category_name(self, category_id: int) -> str | None:
         """Return category name for syncing class_name."""
-        from sqlalchemy import select
         result = await self.session.execute(
             select(Category).where(Category.id == category_id)
         )

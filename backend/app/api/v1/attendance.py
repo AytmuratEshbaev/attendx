@@ -1,5 +1,6 @@
 """Attendance tracking endpoints."""
 
+import asyncio
 import base64
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -41,6 +42,11 @@ def _log_to_response(log) -> AttendanceResponse:
         student_id=log.student_id,
         student_name=log.student.name if log.student else "Unknown",
         class_name=log.student.class_name if log.student else None,
+        category_name=(
+            log.student.category.name
+            if log.student and log.student.category
+            else None
+        ),
         device_name=log.device.name if log.device else None,
         event_time=log.event_time,
         event_type=log.event_type,
@@ -63,7 +69,6 @@ async def today_attendance(
 @router.get("/capture-image")
 async def capture_image_proxy(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _user: Annotated[User, Depends(get_current_active_user)],
     url: str = Query(..., description="base64-encoded Hikvision pictureURL"),
 ):
     """Proxy a Hikvision capture image URL using device Digest credentials."""
@@ -119,7 +124,6 @@ async def device_live_attendance(
     limit: int = Query(100, ge=1, le=500),
 ):
     """Fetch the most recent attendance events directly from all active devices (no DB write)."""
-    import asyncio
     from app.config import settings
     from app.core.security import decrypt_device_password
     from app.repositories.device_repo import DeviceRepository

@@ -24,6 +24,9 @@ class Device(TimestampMixin, Base):
     last_online_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    last_polled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     serial_number: Mapped[str | None] = mapped_column(
         String(100), nullable=True

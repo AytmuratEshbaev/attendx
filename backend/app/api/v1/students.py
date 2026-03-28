@@ -42,7 +42,7 @@ def _fire_webhook(coro) -> None:
             )
         )
     except RuntimeError:
-        pass
+        logger.debug("webhook_fire_no_event_loop")
 
 
 async def _bg_sync_all_groups(student_id: uuid.UUID) -> None:
@@ -72,7 +72,17 @@ async def _bg_sync_all_groups(student_id: uuid.UUID) -> None:
             )
 
 
-# IMPORTANT: /import and /export must be registered BEFORE /{student_id}
+# IMPORTANT: /classes, /import, /export must be registered BEFORE /{student_id}
+
+
+@router.get("/classes", response_model=SuccessResponse[list[str]])
+async def list_classes(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Return sorted list of unique class names from active students."""
+    classes = await _svc(db).get_unique_classes()
+    return SuccessResponse(data=classes)
 
 
 @router.post(
@@ -206,14 +216,51 @@ async def get_face(
     db: Annotated[AsyncSession, Depends(get_db)],
     _user: Annotated[User, Depends(get_current_active_user)],
 ):
-    """Return the stored face image for a student."""
-    from pathlib import Path
+    """Return the stored face image for a student.
 
-    student = await _svc(db).get_student(student_id)
+    If no local file exists, tries to fetch it on-demand from any active
+    Hikvision terminal that has the student enrolled (by employee_no),
+    then caches it to disk for subsequent requests.
+    """
+    from pathlib import Path
+    from app.services import hikvision_sync
+    from app.repositories.device_repo import DeviceRepository
+
     path = Path(f"./data/faces/{student_id}.jpg")
-    if not path.exists():
+
+    if path.exists():
+        return Response(
+            content=path.read_bytes(),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "max-age=3600"},
+        )
+
+    # Try to fetch face from Hikvision device on-demand
+    student = await _svc(db).get_student(student_id)
+    if not student.employee_no:
         return Response(status_code=404)
-    return Response(content=path.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
+
+    device_repo = DeviceRepository(db)
+    devices = await device_repo.get_active_devices()
+
+    for device in devices:
+        try:
+            face_bytes = await hikvision_sync.fetch_single_face(device, student.employee_no, all_devices=devices)
+            if face_bytes:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(face_bytes)
+                student.face_registered = True
+                student.face_image_path = str(path)
+                await db.commit()
+                return Response(
+                    content=face_bytes,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "max-age=3600"},
+                )
+        except Exception:
+            continue
+
+    return Response(status_code=404)
 
 
 @router.post(

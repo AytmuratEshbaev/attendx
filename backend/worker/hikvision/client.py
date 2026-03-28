@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -119,13 +120,12 @@ class HikvisionClient:
         Falls back to XML format if JSON returns empty results.
         Paginates automatically until all events are retrieved.
         """
-        import uuid as _uuid
         events: list[AttendanceEvent] = []
         position = 0
         json_endpoint_ok = False  # True if JSON endpoint responded with HTTP 200
         # Hikvision devices typically expect LOCAL device time (no timezone suffix)
         fmt = "%Y-%m-%dT%H:%M:%S"
-        search_id = str(_uuid.uuid4())
+        search_id = str(uuid.uuid4())
 
         async with httpx.AsyncClient(auth=self._auth, timeout=self._timeout) as client:
             while True:
@@ -177,7 +177,6 @@ class HikvisionClient:
         page_size: int = 100,
     ) -> list[AttendanceEvent]:
         """XML fallback for AcsEvent — used by older/some DS-K1T models."""
-        import uuid as _uuid
         events: list[AttendanceEvent] = []
         position = 0
         fmt = "%Y-%m-%dT%H:%M:%S"  # No tz suffix — device interprets as local time
@@ -187,7 +186,7 @@ class HikvisionClient:
                 xml_body = (
                     f"<?xml version='1.0' encoding='UTF-8'?>"
                     f"<AcsEventCond version='2.0' xmlns='http://www.hikvision.com/ver20/XMLSchema'>"
-                    f"<searchID>{_uuid.uuid4()}</searchID>"
+                    f"<searchID>{uuid.uuid4()}</searchID>"
                     f"<searchResultPosition>{position}</searchResultPosition>"
                     f"<maxResults>{page_size}</maxResults>"
                     f"<major>5</major>"

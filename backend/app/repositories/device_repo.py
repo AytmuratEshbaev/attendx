@@ -37,6 +37,12 @@ class DeviceRepository(BaseRepository[Device]):
             )
             await self.session.flush()
 
+    async def update_last_polled_at(self, device_id: int, polled_at: datetime) -> None:
+        await self.session.execute(
+            update(Device).where(Device.id == device_id).values(last_polled_at=polled_at)
+        )
+        await self.session.flush()
+
     async def update_last_online(self, device_id: int) -> Device:
         """Update last_online_at timestamp and return the device."""
         return await self.update(

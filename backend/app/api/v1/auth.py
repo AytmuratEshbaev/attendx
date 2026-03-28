@@ -29,9 +29,12 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
+import structlog
+
 from app.schemas.common import SuccessResponse
 from app.services.audit_service import AuditService
 
+logger = structlog.get_logger()
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -77,7 +80,7 @@ async def login(
             redis = await get_redis()
             await BruteForceProtection(redis).record_failed_attempt(body.username)
         except RuntimeError:
-            pass
+            logger.debug("brute_force_redis_unavailable")
         raise AuthenticationException(
             "Invalid username or password.",
             error_code=ErrorCode.INVALID_CREDENTIALS,
@@ -93,7 +96,7 @@ async def login(
         redis = await get_redis()
         await BruteForceProtection(redis).record_successful_login(body.username)
     except RuntimeError:
-        pass
+        logger.debug("brute_force_redis_unavailable")
 
     jti = str(uuid.uuid4())
     token_data = {"sub": str(user.id), "role": user.role, "jti": jti}
@@ -144,7 +147,7 @@ async def refresh(
                     error_code=ErrorCode.TOKEN_INVALID,
                 )
         except RuntimeError:
-            pass
+            logger.debug("token_blacklist_redis_unavailable")
 
     user_id_str = payload.get("sub")
     if not user_id_str:

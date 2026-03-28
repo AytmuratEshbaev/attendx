@@ -433,7 +433,7 @@ export default function Members() {
               Pastki guruhlar
             </p>
           )}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {catsLoading
               ? Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-24 w-full rounded-xl" />
@@ -556,7 +556,7 @@ export default function Members() {
           {/* Table / Card view */}
           {studentsView === "card" ? (
             studentsLoading ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <Skeleton key={i} className="h-36 w-full" />
                 ))}
@@ -564,7 +564,7 @@ export default function Members() {
             ) : students.length === 0 ? (
               <EmptyState icon={Users} title="O'quvchilar topilmadi" description="Bu guruhda hali o'quvchilar yo'q" />
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {students.map((s) => (
                   <StudentCard key={s.id} student={s} isAdmin={isAdmin} onDelete={setDeleteId} />
                 ))}

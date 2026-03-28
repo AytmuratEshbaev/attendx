@@ -223,6 +223,175 @@ async def fetch_persons_from_device(device: Device) -> list[dict]:
     return persons
 
 
+def _build_face_auth_map(primary_device: Device, all_devices: list | None = None) -> dict:
+    """Build IP → DigestAuth mapping for cross-device faceURL downloads."""
+    password = decrypt_device_password(primary_device.password_enc)
+    auth_map: dict = {
+        primary_device.ip_address: httpx.DigestAuth(primary_device.username, password)
+    }
+    if all_devices:
+        for d in all_devices:
+            if d.ip_address not in auth_map:
+                p = decrypt_device_password(d.password_enc)
+                auth_map[d.ip_address] = httpx.DigestAuth(d.username, p)
+    return auth_map
+
+
+async def _download_face_url(
+    client: httpx.AsyncClient, face_url: str, auth_map: dict
+) -> bytes | None:
+    """Download a faceURL returned by Hikvision FDSearch MatchList."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(face_url)
+    auth = auth_map.get(parsed.hostname) or next(iter(auth_map.values()))
+    try:
+        resp = await client.get(face_url, auth=auth, timeout=8.0)
+        if resp.status_code == 200:
+            ct = resp.headers.get("content-type", "")
+            content = resp.content
+            if "image" in ct or content[:2] == b"\xff\xd8":
+                return content
+    except Exception:
+        pass
+    return None
+
+
+async def fetch_single_face(
+    device: Device,
+    employee_no: str,
+    all_devices: list | None = None,
+) -> bytes | None:
+    """Download a single face photo from Hikvision FDLib by employee_no (FPID).
+
+    Uses FDSearch with FPID filter (blackFD library, FDID=1) then downloads faceURL.
+    Returns JPEG bytes or None if not found / error.
+    """
+    auth_map = _build_face_auth_map(device, all_devices)
+    auth = auth_map[device.ip_address]
+    base_url = f"http://{device.ip_address}:{device.port}"
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        payload = {
+            "FDID": "1",
+            "faceLibType": "blackFD",
+            "FPID": employee_no,
+            "searchResultPosition": 0,
+            "maxResults": 1,
+        }
+        resp = await client.post(
+            f"{base_url}/ISAPI/Intelligent/FDLib/FDSearch?format=json",
+            json=payload,
+            auth=auth,
+        )
+        if resp.status_code != 200:
+            return None
+
+        records = resp.json().get("MatchList", [])
+        if not records:
+            return None
+
+        face_url = records[0].get("faceURL")
+        if not face_url:
+            return None
+
+        return await _download_face_url(client, face_url, auth_map)
+
+
+async def fetch_faces_from_device(
+    device: Device,
+    all_devices: list | None = None,
+) -> dict[str, bytes]:
+    """Download all enrolled face photos from Hikvision FDLib (blackFD, FDID=1).
+
+    Returns mapping of employee_no (FPID) → JPEG bytes.
+    Uses FDSearch MatchList + faceURL download; handles cross-device URLs.
+    """
+    auth_map = _build_face_auth_map(device, all_devices)
+    auth = auth_map[device.ip_address]
+    base_url = f"http://{device.ip_address}:{device.port}"
+
+    face_data: dict[str, bytes] = {}
+    search_position = 0
+    page_size = 30
+    total = 0
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        while True:
+            payload = {
+                "FDID": "1",
+                "faceLibType": "blackFD",
+                "searchResultPosition": search_position,
+                "maxResults": page_size,
+            }
+            resp = await client.post(
+                f"{base_url}/ISAPI/Intelligent/FDLib/FDSearch?format=json",
+                json=payload,
+                auth=auth,
+            )
+            if resp.status_code != 200:
+                raise HikvisionSyncError(
+                    f"FDSearch failed [{resp.status_code}]: {resp.text[:200]}"
+                )
+
+            data = resp.json()
+            records = data.get("MatchList", [])
+            total = data.get("totalMatches", 0)
+
+            logger.info(
+                "fdlib_search_page",
+                device=device.name,
+                position=search_position,
+                found=len(records),
+                total=total,
+            )
+
+            for r in records:
+                fpid = str(r.get("FPID", "")).strip()
+                face_url = r.get("faceURL")
+                if not fpid or not face_url:
+                    continue
+                img = await _download_face_url(client, face_url, auth_map)
+                if img:
+                    face_data[fpid] = img
+                else:
+                    logger.warning("face_url_download_failed", fpid=fpid, url=face_url)
+
+            search_position += len(records)
+            if search_position >= total or not records:
+                break
+
+    logger.info(
+        "faces_downloaded",
+        device=device.name,
+        total=total,
+        downloaded=len(face_data),
+    )
+    return face_data
+
+
+def _extract_image_from_multipart(content: bytes, content_type: str) -> bytes | None:
+    """Extract JPEG image bytes from a Hikvision multipart response."""
+    import re
+
+    match = re.search(r"boundary=([^\s;\"]+)", content_type)
+    if not match:
+        return None
+    boundary = match.group(1).strip('"').encode()
+
+    parts = content.split(b"--" + boundary)
+    for part in parts[1:]:
+        if b"\r\n\r\n" not in part:
+            continue
+        headers_raw, body = part.split(b"\r\n\r\n", 1)
+        # Strip trailing boundary marker
+        body = body.rstrip(b"\r\n-")
+        headers_lower = headers_raw.lower()
+        if b"image" in headers_lower or body[:2] == b"\xff\xd8":
+            return body if body else None
+    return None
+
+
 async def remove_person(student: Student, device: Device) -> None:
     """Remove person from Hikvision terminal."""
     password = decrypt_device_password(device.password_enc)

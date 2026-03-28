@@ -2,7 +2,10 @@
 
 import time
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = structlog.get_logger()
 
 from app.core.security import decrypt_device_password, encrypt_device_password
 from app.models.device import Device
@@ -67,7 +70,7 @@ class DeviceService:
             await self.repo.update_online_status(device_id, True)
             await self.session.commit()
         except Exception:
-            pass
+            logger.debug("device_health_check_error", device_id=device_id, exc_info=True)
 
         device = await self.repo.get_or_404(device_id)
         return DeviceHealth(

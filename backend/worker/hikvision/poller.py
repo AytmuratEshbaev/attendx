@@ -23,8 +23,9 @@ from worker.hikvision.client import AttendanceEvent, HikvisionClient
 logger = structlog.get_logger()
 
 _LAST_POLL_KEY = "hikvision:last_poll:{device_id}"
-# On first poll (no Redis key yet), look back this many seconds
-_FIRST_POLL_LOOKBACK = 86400  # 24 hours on first poll
+# On first poll (no Redis key yet and no DB record), look back this many seconds.
+# Historical data is already in DB (deduped by raw_event_id) — 5 min is enough.
+_FIRST_POLL_LOOKBACK = 300  # 5 minutes on first poll
 
 
 class AttendancePoller:
@@ -53,7 +54,7 @@ class AttendancePoller:
             repo = DeviceRepository(session)
             devices = await repo.get_active_devices()
 
-        for device in devices:
+        async def _safe_poll(device: Device) -> None:
             try:
                 await self._poll_device(device)
             except Exception:
@@ -64,6 +65,8 @@ class AttendancePoller:
                     exc_info=True,
                 )
 
+        await asyncio.gather(*[_safe_poll(d) for d in devices])
+
     async def _poll_device(self, device: Device) -> None:
         redis_key = _LAST_POLL_KEY.format(device_id=device.id)
         last_poll_str: str | None = await self.redis.get(redis_key)
@@ -71,6 +74,10 @@ class AttendancePoller:
 
         if last_poll_str:
             start_time = datetime.fromisoformat(last_poll_str)
+        elif device.last_polled_at:
+            # Redis was cleared (e.g. docker restart) but DB still has the last poll time
+            start_time = device.last_polled_at
+            logger.info("redis_miss_using_db_fallback", device_id=device.id, name=device.name)
         else:
             start_time = now - timedelta(seconds=_FIRST_POLL_LOOKBACK)
 
@@ -107,11 +114,12 @@ class AttendancePoller:
         if events:
             new_count = await self._save_events(device, events)
 
-        # Update last poll time and device online status
+        # Update last poll time in Redis and DB (DB survives Redis restarts)
         await self.redis.set(redis_key, now.isoformat())
         async with AsyncSessionLocal() as session:
             repo = DeviceRepository(session)
             await repo.update_online_status(device.id, True)
+            await repo.update_last_polled_at(device.id, now)
             await session.commit()
 
         logger.info(
@@ -148,11 +156,15 @@ class AttendancePoller:
                     )
                     continue
 
+                # event_type qurilmaning is_entry sozlamasidan aniqlanadi,
+                # chunki Hikvision inOutStatus maydoni har doim "entry" qaytaradi.
+                resolved_event_type = "entry" if device.is_entry else "exit"
+
                 log = AttendanceLog(
                     student_id=student.id,
                     device_id=device.id,
                     event_time=event.event_time,
-                    event_type=event.event_type,
+                    event_type=resolved_event_type,
                     verify_mode=event.verify_mode,
                     raw_event_id=raw_event_id,
                     picture_url=event.picture_url,
@@ -167,7 +179,7 @@ class AttendancePoller:
                     "student_name": student.name,
                     "class_name": student.class_name or "",
                     "device_name": device.name,
-                    "event_type": event.event_type,
+                    "event_type": resolved_event_type,
                     "event_time": event.event_time.isoformat(),
                     "verify_mode": event.verify_mode,
                     "picture_url": event.picture_url,
@@ -184,7 +196,7 @@ class AttendancePoller:
                 # Fire webhook (fire-and-forget)
                 mgr = get_webhook_event_manager()
                 if mgr:
-                    if event.event_type == "entry":
+                    if resolved_event_type == "entry":
                         asyncio.create_task(
                             mgr.on_attendance_entry(student, device, event.event_time)
                         )

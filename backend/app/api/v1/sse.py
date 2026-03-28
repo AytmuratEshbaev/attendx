@@ -130,7 +130,7 @@ async def _attendance_event_generator(
             await pubsub.unsubscribe(channel)
             await pubsub.aclose()
         except Exception:
-            pass
+            logger.debug("sse_pubsub_cleanup_error", exc_info=True)
 
 
 @router.get("/attendance")

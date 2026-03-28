@@ -50,4 +50,6 @@ export const studentsApi = {
 
   export: (params?: { class_name?: string; format?: string; category_id?: number }) =>
     api.get("/students/export", { params, responseType: "blob" }),
+
+  classes: () => api.get<ApiResponse<string[]>>("/students/classes"),
 };

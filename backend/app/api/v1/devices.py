@@ -1,5 +1,6 @@
 """Hikvision device management endpoints."""
 
+import base64
 from typing import Annotated
 
 import httpx
@@ -129,9 +130,8 @@ async def device_snapshot(
                 headers={"Cache-Control": "no-store"},
             )
     except Exception:
-        pass
+        logger.debug("device_snapshot_error", device_id=device_id)
     # Return transparent 1×1 pixel on error so <img> doesn't break
-    import base64
     placeholder = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
     )
@@ -189,3 +189,117 @@ async def import_persons(
         "skipped": skipped,
         "errors": errors,
     })
+
+
+@router.post("/{device_id}/import-faces", response_model=SuccessResponse[dict])
+async def import_faces(
+    device_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(require_role("admin"))],
+):
+    """Download face photos from Hikvision FDLib and update local student records."""
+    from pathlib import Path
+
+    device = await _svc(db).get_device(device_id)
+    if not device:
+        raise NotFoundException(f"Device {device_id} not found.")
+
+    all_devices = await _svc(db).list_devices()
+    face_data = await hikvision_sync.fetch_faces_from_device(device, all_devices=all_devices)
+
+    faces_dir = Path("data/faces")
+    faces_dir.mkdir(parents=True, exist_ok=True)
+
+    repo = StudentRepository(db)
+    saved = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for employee_no, image_bytes in face_data.items():
+        try:
+            student = await repo.get_by_employee_no(employee_no)
+            if not student:
+                skipped += 1
+                continue
+            face_path = faces_dir / f"{student.id}.jpg"
+            face_path.write_bytes(image_bytes)
+            student.face_registered = True
+            student.face_image_path = str(face_path)
+            saved += 1
+        except Exception as exc:
+            errors.append(f"{employee_no}: {exc}")
+
+    await db.commit()
+
+    logger.info(
+        "faces_imported",
+        device=device.name,
+        total=len(face_data),
+        saved=saved,
+        skipped=skipped,
+    )
+
+    return SuccessResponse(data={
+        "total": len(face_data),
+        "saved": saved,
+        "skipped": skipped,
+        "errors": errors[:10],
+    })
+
+
+# ─── Door Control ─────────────────────────────────────────────────────────────
+
+from pydantic import BaseModel as _BaseModel
+
+
+class DoorControlRequest(_BaseModel):
+    command: str  # unlock | close | remain_open | remain_closed
+    door_no: int = 1
+
+
+@router.post("/{device_id}/door", response_model=SuccessResponse[dict])
+async def door_control(
+    device_id: int,
+    body: DoorControlRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(require_role("admin"))],
+):
+    """Send door control command to Hikvision device via ISAPI."""
+    from app.core.security import decrypt_device_password
+
+    CMD_MAP = {
+        "unlock": "open",
+        "close": "close",
+        "remain_open": "alwaysOpen",
+        "remain_closed": "alwaysClose",
+    }
+    hik_cmd = CMD_MAP.get(body.command)
+    if not hik_cmd:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"Unknown command: {body.command}")
+
+    device = await _svc(db).get_device(device_id)
+    if not device:
+        raise NotFoundException(f"Device {device_id} not found.")
+
+    password = decrypt_device_password(device.password_enc)
+    url = (
+        f"http://{device.ip_address}:{device.port}"
+        f"/ISAPI/AccessControl/RemoteControl/door/{body.door_no}"
+    )
+    xml_body = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f"<RemoteControlDoor><cmd>{hik_cmd}</cmd></RemoteControlDoor>"
+    )
+    try:
+        async with httpx.AsyncClient(
+            auth=httpx.DigestAuth(device.username, password), timeout=8.0
+        ) as client:
+            resp = await client.put(url, content=xml_body, headers={"Content-Type": "application/xml"})
+        if resp.status_code in (200, 201):
+            return SuccessResponse(data={"message": "Buyruq yuborildi", "command": body.command})
+        return SuccessResponse(data={"message": f"Qurilma javobi: {resp.status_code}", "command": body.command})
+    except Exception as exc:
+        logger.warning("door_control_failed", device=device.name, error=str(exc))
+        from fastapi import HTTPException
+        raise HTTPException(status_code=502, detail=f"Qurilmaga ulanib bo'lmadi: {exc}")

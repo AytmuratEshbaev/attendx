@@ -1,8 +1,19 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, ScanFace, Upload, Loader2, CalendarDays, UserCog, Camera } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ScanFace,
+  Upload,
+  Loader2,
+  CalendarDays,
+  UserCog,
+  CreditCard,
+  Fingerprint,
+  Camera,
+} from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { useAuthStore } from "@/store/authStore";
 import {
   BarChart,
   Bar,
@@ -42,6 +53,95 @@ import { useStudentAttendance } from "@/hooks/useAttendance";
 import { DateRangePicker } from "@/components/common/DateRangePicker";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import type { StudentUpdate } from "@/types";
+
+// ─── Yuz fotosi (auth bilan) ─────────────────────────────────────────────────
+function StudentFacePhoto({ studentId, hasPhoto }: { studentId: string; hasPhoto: boolean }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    if (!hasPhoto) return;
+    let cancelled = false;
+    let blobUrl: string | null = null;
+
+    fetch(`/api/v1/students/${studentId}/face`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((r) => { if (!r.ok) throw new Error(); return r.blob(); })
+      .then((blob) => {
+        if (cancelled) return;
+        blobUrl = URL.createObjectURL(blob);
+        setSrc(blobUrl);
+      })
+      .catch(() => { if (!cancelled) setError(true); });
+
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [studentId, hasPhoto, accessToken]);
+
+  if (hasPhoto && src && !error) {
+    return (
+      <img
+        src={src}
+        alt="Yuz fotosi"
+        className="h-40 w-40 rounded-lg object-cover border"
+      />
+    );
+  }
+  return (
+    <div className="flex h-40 w-40 items-center justify-center rounded-lg border-2 border-dashed bg-muted/30">
+      <ScanFace className="h-16 w-16 text-muted-foreground/40" />
+    </div>
+  );
+}
+
+// ─── So'nggi kirish rasmi (capture image proxy) ─────────────────────────────
+function LastEntryImage({
+  pictureUrl,
+  eventTime,
+  deviceName,
+}: {
+  pictureUrl: string;
+  eventTime: string;
+  deviceName: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
+  const encoded = btoa(pictureUrl);
+  const src = `/api/v1/attendance/capture-image?url=${encodeURIComponent(encoded)}`;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">So'nggi yuz orqali kirish rasmi</p>
+      <div className="flex items-start gap-4">
+        {!failed ? (
+          <img
+            src={src}
+            alt="Kirish rasmi"
+            className="h-28 w-20 rounded-md object-cover border"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <div className="flex h-28 w-20 items-center justify-center rounded-md border-2 border-dashed bg-muted/30">
+            <Camera className="h-8 w-8 text-muted-foreground/40" />
+          </div>
+        )}
+        <div className="space-y-1 text-sm text-muted-foreground">
+          <p>
+            {new Date(
+              eventTime.endsWith("Z") || eventTime.includes("+")
+                ? eventTime
+                : eventTime + "Z",
+            ).toLocaleString("uz")}
+          </p>
+          {deviceName && <p>Qurilma: {deviceName}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -97,14 +197,14 @@ export default function StudentDetail() {
     }
   };
 
-  // Attendance stats computed from history
+  // Stats
   const totalRecords = history.length;
   const entryCount = history.filter((r) => r.event_type === "entry").length;
   const exitCount = history.filter((r) => r.event_type === "exit").length;
   const presentDays = attendanceStats?.present_days ?? 0;
   const attendancePct = attendanceStats?.percentage ?? 0;
 
-  // Last 30 days chart data
+  // Chart data
   const chartData = (() => {
     const dayMap: Record<string, { date: string; entry: number; exit: number }> = {};
     history.forEach((r) => {
@@ -115,6 +215,11 @@ export default function StudentDetail() {
     });
     return Object.values(dayMap).sort((a, b) => a.date.localeCompare(b.date)).slice(-30);
   })();
+
+  // So'nggi yuz orqali kirish rasmi
+  const lastFaceEntry = history.find(
+    (r) => r.verify_mode?.toLowerCase().includes("face") && r.picture_url,
+  );
 
   if (isLoading) {
     return (
@@ -131,6 +236,7 @@ export default function StudentDetail() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate("/students")}>
           <ArrowLeft className="h-5 w-5" />
@@ -157,17 +263,13 @@ export default function StudentDetail() {
             <CalendarDays className="h-4 w-4" />
             Davomat
           </TabsTrigger>
-          <TabsTrigger value="info" className="gap-1.5">
+          <TabsTrigger value="profile" className="gap-1.5">
             <UserCog className="h-4 w-4" />
-            Ma'lumot
-          </TabsTrigger>
-          <TabsTrigger value="face" className="gap-1.5">
-            <Camera className="h-4 w-4" />
-            Yuz boshqaruvi
+            Ma'lumot va Boshqaruv
           </TabsTrigger>
         </TabsList>
 
-        {/* Attendance tab */}
+        {/* ── Davomat tab ── */}
         <TabsContent value="attendance" className="space-y-4">
           <Card>
             <CardHeader>
@@ -185,7 +287,6 @@ export default function StudentDetail() {
             </CardContent>
           </Card>
 
-          {/* Stats summary */}
           <div className="grid gap-4 sm:grid-cols-4">
             <Card>
               <CardContent className="pt-6 text-center">
@@ -213,7 +314,6 @@ export default function StudentDetail() {
             </Card>
           </div>
 
-          {/* Mini bar chart */}
           {chartData.length > 0 && (
             <Card>
               <CardHeader>
@@ -235,7 +335,6 @@ export default function StudentDetail() {
             </Card>
           )}
 
-          {/* Attendance history table */}
           <Card>
             <CardHeader>
               <CardTitle>Davomat tarixi</CardTitle>
@@ -250,6 +349,7 @@ export default function StudentDetail() {
                         <TableHead>Sana va vaqt</TableHead>
                         <TableHead>Turi</TableHead>
                         <TableHead>Qurilma</TableHead>
+                        <TableHead>Usul</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -266,6 +366,15 @@ export default function StudentDetail() {
                           <TableCell className="text-muted-foreground">
                             {record.device_name ?? "Noma'lum"}
                           </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                            {record.verify_mode === "face" || record.verify_mode?.includes("face")
+                              ? "Yuz orqali"
+                              : record.verify_mode === "card" || record.verify_mode?.includes("card")
+                              ? "Karta"
+                              : record.verify_mode?.includes("finger")
+                              ? "Barmoq izi"
+                              : record.verify_mode ?? "—"}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -280,11 +389,12 @@ export default function StudentDetail() {
           </Card>
         </TabsContent>
 
-        {/* Info tab */}
-        <TabsContent value="info">
+        {/* ── Ma'lumot va Boshqaruv tab ── */}
+        <TabsContent value="profile" className="space-y-4">
+          {/* Shaxsiy ma'lumot */}
           <Card>
             <CardHeader>
-              <CardTitle>Ma'lumot</CardTitle>
+              <CardTitle>Shaxsiy ma'lumot</CardTitle>
               <div className="flex gap-2">
                 {!editing ? (
                   <Button size="sm" onClick={startEditing}>Tahrirlash</Button>
@@ -355,49 +465,108 @@ export default function StudentDetail() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Face Management tab */}
-        <TabsContent value="face">
+          {/* Kirish usullari va yuz boshqaruvi */}
           <Card>
             <CardHeader>
-              <CardTitle>Yuz rasmi</CardTitle>
-              <CardDescription>Yuz tanish uchun rasm yuklang</CardDescription>
+              <CardTitle>Kirish usullari</CardTitle>
+              <CardDescription>
+                Ro'yxatdan o'tgan usullar va yuz fotosini boshqarish
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col items-center gap-4">
-              <div className="flex h-32 w-32 items-center justify-center rounded-full border-2 border-dashed">
-                {student.face_registered ? (
-                  <ScanFace className="h-16 w-16 text-primary" />
-                ) : (
-                  <ScanFace className="h-16 w-16 text-muted-foreground" />
-                )}
+            <CardContent className="space-y-6">
+              {/* Usul indikatorlari */}
+              <div className="grid grid-cols-3 gap-3">
+                {/* Yuz */}
+                <div
+                  className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors ${
+                    student.face_registered
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border bg-muted/20 opacity-50"
+                  }`}
+                >
+                  <ScanFace
+                    className={`h-8 w-8 ${student.face_registered ? "text-primary" : "text-muted-foreground"}`}
+                  />
+                  <span className="text-xs font-medium">Yuz</span>
+                  <Badge
+                    variant={student.face_registered ? "default" : "outline"}
+                    className="text-xs"
+                  >
+                    {student.face_registered ? "Faol" : "Yo'q"}
+                  </Badge>
+                </div>
+
+                {/* Karta */}
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-muted/20 p-4 opacity-40">
+                  <CreditCard className="h-8 w-8 text-muted-foreground" />
+                  <span className="text-xs font-medium">Karta</span>
+                  <Badge variant="outline" className="text-xs">
+                    Yo'q
+                  </Badge>
+                </div>
+
+                {/* Barmoq izi */}
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-muted/20 p-4 opacity-40">
+                  <Fingerprint className="h-8 w-8 text-muted-foreground" />
+                  <span className="text-xs font-medium">Barmoq izi</span>
+                  <Badge variant="outline" className="text-xs">
+                    Yo'q
+                  </Badge>
+                </div>
               </div>
-              <StatusBadge
-                status={student.face_registered ? "active" : "inactive"}
-                label={student.face_registered ? "Ro'yxatdan o'tgan" : "Ro'yxatdan o'tmagan"}
-              />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) faceMutation.mutate(file);
-                }}
-              />
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={faceMutation.isPending}
-              >
-                {faceMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 h-4 w-4" />
-                )}
-                Rasm yuklash
-              </Button>
+
+              {/* Yuz fotosi */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Yuz rasmi</p>
+                <div className="flex items-start gap-4">
+                  <StudentFacePhoto studentId={student.id} hasPhoto={student.face_registered} />
+                  <div className="space-y-2">
+                    <StatusBadge
+                      status={student.face_registered ? "active" : "inactive"}
+                      label={
+                        student.face_registered
+                          ? "Ro'yxatdan o'tgan"
+                          : "Ro'yxatdan o'tmagan"
+                      }
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) faceMutation.mutate(file);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={faceMutation.isPending}
+                    >
+                      {faceMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="mr-2 h-4 w-4" />
+                      )}
+                      {student.face_registered ? "Yangilash" : "Rasm yuklash"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* So'nggi yuz orqali kirish rasmi */}
+              {lastFaceEntry?.picture_url && (
+                <div className="border-t pt-4">
+                  <LastEntryImage
+                    pictureUrl={lastFaceEntry.picture_url}
+                    eventTime={lastFaceEntry.event_time}
+                    deviceName={lastFaceEntry.device_name ?? null}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

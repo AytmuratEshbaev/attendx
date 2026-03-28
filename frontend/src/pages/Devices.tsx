@@ -14,6 +14,9 @@ import {
   X,
   ArrowUpDown,
   Camera,
+  DoorOpen,
+  ChevronDown,
+  ScanFace,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
@@ -45,6 +48,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { devicesApi } from "@/services/devicesApi";
 import {
@@ -146,11 +157,28 @@ export default function Devices() {
   const [bulkSyncing, setBulkSyncing] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
+  const [importingFaces, setImportingFaces] = useState<number | null>(null);
+
   const { data, isLoading } = useDevices();
   const createMutation = useCreateDevice();
   const updateMutation = useUpdateDevice();
   const deleteMutation = useDeleteDevice();
   const syncMutation = useSyncDevice();
+
+  const handleImportFaces = async (deviceId: number, deviceName: string) => {
+    setImportingFaces(deviceId);
+    try {
+      const res = await devicesApi.importFaces(deviceId);
+      const { saved, total, skipped } = res.data.data;
+      toast.success(`${saved} ta yuz yuklandi (${total} topildi, ${skipped} o'tkazib yuborildi)`, {
+        description: deviceName,
+      });
+    } catch {
+      toast.error("Yuzlarni yuklashda xato", { description: deviceName });
+    } finally {
+      setImportingFaces(null);
+    }
+  };
 
   const devices = data?.data?.data ?? [];
   const onlineCount = devices.filter(isDeviceOnline).length;
@@ -485,15 +513,84 @@ export default function Devices() {
                   <DeviceSnapshot device={d} />
                   {!selecting && (
                     <div className="flex gap-2 border-t pt-3">
+                      {/* Eshik boshqaruvi */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            disabled={!online}
+                          >
+                            <DoorOpen className="mr-1.5 h-3.5 w-3.5" />
+                            Eshik
+                            <ChevronDown className="ml-1 h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuLabel>Eshik boshqaruvi</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              devicesApi.doorControl(d.id, "unlock")
+                                .then(() => toast.success("Eshik ochildi"))
+                                .catch(() => toast.error("Buyruq yuborishda xato"));
+                            }}
+                          >
+                            🔓 Ochish (Unlock)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              devicesApi.doorControl(d.id, "close")
+                                .then(() => toast.success("Eshik yopildi"))
+                                .catch(() => toast.error("Buyruq yuborishda xato"));
+                            }}
+                          >
+                            🔒 Yopish (Closed)
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              devicesApi.doorControl(d.id, "remain_open")
+                                .then(() => toast.success("Doimo ochiq holatga o'tildi"))
+                                .catch(() => toast.error("Buyruq yuborishda xato"));
+                            }}
+                          >
+                            🚪 Doimo ochiq
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              devicesApi.doorControl(d.id, "remain_closed")
+                                .then(() => toast.success("Doimo yopiq holatga o'tildi"))
+                                .catch(() => toast.error("Buyruq yuborishda xato"));
+                            }}
+                          >
+                            🚫 Doimo yopiq
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1"
                         onClick={() => syncMutation.mutate(d.id)}
                         disabled={syncMutation.isPending}
+                        title="Sinxronlash"
                       >
-                        <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", syncMutation.isPending && "animate-spin")} />
-                        Sinxronlash
+                        <RefreshCw className={cn("h-3.5 w-3.5", syncMutation.isPending && "animate-spin")} />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleImportFaces(d.id, d.name)}
+                        disabled={importingFaces === d.id}
+                        title="Yuzlarni terminaldan yuklash"
+                      >
+                        {importingFaces === d.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ScanFace className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                       <Button
                         variant="outline"

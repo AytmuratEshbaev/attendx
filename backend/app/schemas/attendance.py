@@ -11,6 +11,7 @@ class AttendanceResponse(BaseModel):
     student_id: uuid.UUID
     student_name: str
     class_name: str | None = None
+    category_name: str | None = None
     device_name: str | None = None
     event_time: datetime
     event_type: str

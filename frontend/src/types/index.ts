@@ -92,10 +92,12 @@ export interface AttendanceRecord {
   student_id: string;
   student_name: string;
   class_name: string;
+  category_name: string | null;
   device_name: string | null;
   event_time: string;
   event_type: "entry" | "exit";
   verify_mode: string;
+  picture_url?: string | null;
 }
 
 export interface AttendanceStats {
