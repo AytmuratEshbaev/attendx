@@ -109,42 +109,24 @@ class AttendXBot:
         self.app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
     async def start(self) -> None:
-        """Start the bot: long polling in DEBUG mode, webhook in production."""
+        """Start the bot with long polling."""
         await self.initialize()
 
-        if settings.LOG_LEVEL == "DEBUG":
-            # Development — long polling
-            await self.app.initialize()
-            await self.app.start()
-            await self.app.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True,
-            )
-            logger.info("bot_polling_started")
+        await self.app.initialize()
+        await self.app.start()
+        await self.app.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,
+        )
+        logger.info("bot_polling_started")
 
-            # Run notification listener and heartbeat concurrently
-            try:
-                await asyncio.gather(
-                    self._notification_listener(),
-                    self._keep_alive(),
-                )
-            except asyncio.CancelledError:
-                pass
-        else:
-            # Production — webhook mode
-            if not settings.WEBHOOK_DOMAIN:
-                raise RuntimeError(
-                    "WEBHOOK_DOMAIN must be set in production (LOG_LEVEL != DEBUG)"
-                )
-            await self.app.run_webhook(
-                listen="0.0.0.0",
-                port=8443,
-                url_path=f"bot/{settings.TELEGRAM_BOT_TOKEN}",
-                webhook_url=(
-                    f"https://{settings.WEBHOOK_DOMAIN}"
-                    f"/bot/{settings.TELEGRAM_BOT_TOKEN}"
-                ),
+        try:
+            await asyncio.gather(
+                self._notification_listener(),
+                self._keep_alive(),
             )
+        except asyncio.CancelledError:
+            pass
 
     async def _notification_listener(self) -> None:
         """Subscribe to Redis pub/sub and forward attendance events to parents."""
